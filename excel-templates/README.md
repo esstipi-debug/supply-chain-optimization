@@ -1,25 +1,31 @@
 # Excel Templates
 
-> **Status:** Planned export layer. Core models run in Python (`src/`).
+> **Status:** Python generates `.xlsx` workbooks from analysis results.
 
-Per Vandeput (2020), Excel is best for **visualizing results** and simple what-if checks — not for Monte Carlo simulation or advanced distributions.
+Per Vandeput (2020), Excel is best for **visualizing results** and simple what-if checks — Monte Carlo stays in Python.
 
-## Planned sheets
+## Generate workbook
 
-| Sheet | Source module | Book chapter |
-|-------|---------------|--------------|
-| EOQ calculator | `src/eoq.py` | Ch. 2 |
-| Safety stock | `src/safety_stock.py` | Ch. 4 |
-| Policy (s,Q) / (R,S) | `src/policies.py` | Ch. 5 |
-| Simulation summary | `src/simulation.py` | Ch. 5.3 |
+```bash
+pip install -r requirements.txt
+python examples/build_excel_workbook.py
+# -> excel-templates/inventory-analysis.xlsx
 
-## Workflow (current)
+python examples/run_complete.py --simulate --excel excel-templates/my-sku.xlsx
+```
 
-1. Run full analysis: `python examples/run_complete.py --simulate --export output/summary.csv`
-2. Open `output/summary.csv` in Excel for what-if and dashboards
-3. Or run part scripts: `run_part1_part2.py`, `run_part3.py`, `run_part4.py`
+## Sheets
 
-## Reference formulas in Excel
+| Sheet | Content |
+|-------|---------|
+| Summary | EOQ, policies, optimization results |
+| Parameters | Inputs (D, h, k, L, alpha, ...) |
+| Formulas | Book reference formulas |
+| GSM | Multi-echelon allocation (Ch. 10) |
+| Simulation | Sim metrics when `--simulate` |
+| Newsvendor | Muffins example (Ch. 11) |
+
+## Excel formulas (manual what-if)
 
 ```
 EOQ:     =SQRT(2*D*k/h)
@@ -27,4 +33,4 @@ z_alpha: =NORM.S.INV(alpha)
 Ss:      =NORM.S.INV(alpha)*sigma*SQRT(tau)
 ```
 
-See [METHODOLOGY.md](../documentation/METHODOLOGY.md) for full notation.
+See [METHODOLOGY.md](../documentation/METHODOLOGY.md) for notation.

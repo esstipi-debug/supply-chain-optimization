@@ -10,10 +10,11 @@ from src.cost_optimization import optimize_rs_policy, optimize_sq_policy
 from src.data_loader import annualize_demand, demand_stats, load_demand_csv
 from src.distributions import safety_stock_gamma, select_distribution
 from src.eoq import compute_eoq, round_review_period_power_of_two
+from src.excel_export import gsm_allocation_to_dict, write_analysis_workbook
 from src.export import write_policy_comparison, write_summary_csv
 from src.fill_rate import safety_stock_for_fill_rate
-from src.multi_echelon import optimize_serial_gsm
-from src.newsvendor import optimal_newsvendor_discrete
+from src.multi_echelon import optimize_serial_gsm, simulate_serial_gsm
+from src.newsvendor import muffin_pmf, optimal_newsvendor_discrete
 from src.policies import continuous_review_sq, periodic_review_rs
 from src.simulation import simulate_rs_policy, simulate_sq_policy
 from src.risk_period import demand_over_risk_period
@@ -33,6 +34,7 @@ def main() -> None:
     parser.add_argument("--periods-per-year", type=float, default=52.0)
     parser.add_argument("--simulate", action="store_true")
     parser.add_argument("--export", type=Path, default=None, help="CSV output path")
+    parser.add_argument("--excel", type=Path, default=None, help="Excel .xlsx output path")
     args = parser.parse_args()
 
     series = load_demand_csv(args.data, product_id=args.product)
@@ -93,8 +95,17 @@ def main() -> None:
     print(f"  Recommended: {fit.recommended.value}, gamma Ss(tau=5)={ss_gamma:.0f}\n")
 
     gsm = optimize_serial_gsm([4, 3, 2], 100, 25, [1, 2, 4], args.service_level, 1.0)
+    gsm_sim = simulate_serial_gsm(gsm, [4, 3, 2], periods=2000, seed=1) if args.simulate else None
+    nv = optimal_newsvendor_discrete(muffin_pmf(), price=6, unit_cost=2, salvage_value=1)
     print("[Ch. 10] GSM")
-    print(f"  Optimal x_tau={gsm.risk_periods}, holding cost={gsm.total_holding_cost:.0f}\n")
+    print(f"  Optimal x_tau={gsm.risk_periods}, holding cost={gsm.total_holding_cost:.0f}")
+    if gsm_sim:
+        print(f"  Sim fill rate={gsm_sim.fill_rate:.1%}, mean backorders={gsm_sim.mean_backorders:.1f}\n")
+    else:
+        print()
+
+    print("[Ch. 11] Newsvendor")
+    print(f"  Muffins Q*={nv.optimal_quantity:.0f}, profit={nv.expected_profit:.2f}\n")
 
     sim_row: dict[str, float] = {}
     if args.simulate:
@@ -133,7 +144,54 @@ def main() -> None:
             },
         )
         out = write_summary_csv([row], args.export)
-        print(f"Exported: {out}")
+        print(f"Exported CSV: {out}")
+
+    if args.excel:
+        sim_export = {
+            **sim_row,
+            **(
+                {
+                    "gsm_fill_rate": gsm_sim.fill_rate,
+                    "gsm_mean_backorders": gsm_sim.mean_backorders,
+                }
+                if gsm_sim
+                else {}
+            ),
+        }
+        xlsx = write_analysis_workbook(
+            args.excel,
+            product_id=args.product,
+            parameters={
+                "annual_demand": annual_demand,
+                "mean_demand_per_period": mu,
+                "demand_std": sigma,
+                "holding_cost_per_period": args.holding_cost,
+                "order_cost": args.order_cost,
+                "backorder_cost": args.backorder_cost,
+                "lead_time": args.lead_time,
+                "service_level": args.service_level,
+                "fill_rate_target": args.fill_rate_target,
+            },
+            results={
+                "EOQ Q*": eoq.order_quantity,
+                "EOQ cost": eoq.optimal_total_cost,
+                "(s,Q) Q": sq.order_quantity,
+                "(s,Q) s": sq.reorder_point,
+                "(R,S) R": rs.review_period,
+                "(R,S) S": rs.order_up_to_level,
+                "Fill rate Ss": fr.safety_stock,
+                "Optimal R": best_rs.review_period,
+                "Distribution": fit.recommended.value,
+            },
+            gsm=gsm_allocation_to_dict(gsm),
+            simulation=sim_export or None,
+            newsvendor={
+                "Q*": nv.optimal_quantity,
+                "critical ratio": nv.critical_ratio,
+                "expected profit": nv.expected_profit,
+            },
+        )
+        print(f"Exported Excel: {xlsx}")
 
 
 if __name__ == "__main__":

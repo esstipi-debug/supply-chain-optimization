@@ -58,6 +58,11 @@ sim, start_ss = find_best_safety_stock_smart_start(
     holding_cost_per_period=1.25, fixed_order_cost=1000, backorder_cost=50)
 ```
 
-Run: `python examples/run_part4.py`
+Run: `python examples/run_part4.py` | Tests: `test_distributions.py`, `test_multi_echelon.py`, `test_newsvendor.py`, `test_simulation_opt.py`
 
-Tests: `test_distributions.py`, `test_multi_echelon.py`, `test_newsvendor.py`, `test_simulation_opt.py`
+## Excel export
+
+```bash
+python examples/run_complete.py --excel excel-templates/analysis.xlsx
+python examples/build_excel_workbook.py
+```

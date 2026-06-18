@@ -147,8 +147,9 @@ def simulate_sq_policy(
     std_demand: float = 5.0,
     historical_demand: np.ndarray | None = None,
     seed: int | None = 42,
+    lost_sales: bool = False,
 ) -> SimulationResult:
-    """Simulate continuous review (s, Q) with backorders."""
+    """Simulate continuous review (s, Q) with backorders or lost sales."""
     if lead_time_periods < 0 or order_quantity <= 0:
         raise ValueError("invalid policy parameters")
 
@@ -188,8 +189,11 @@ def simulate_sq_policy(
             on_hand -= demand[t]
         else:
             short = demand[t] - on_hand
-            backorders += short
-            on_hand = 0.0
+            if lost_sales:
+                on_hand = 0.0
+            else:
+                backorders += short
+                on_hand = 0.0
 
         if net_inventory <= reorder_point:
             pipeline.append((t + lead_time_periods, order_quantity))

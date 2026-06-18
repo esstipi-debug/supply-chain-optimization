@@ -157,10 +157,13 @@ def echelon_orders(
     local_on_hand: list[float],
     in_transit: list[float],
     echelon_targets: tuple[float, ...],
+    customer_backorders: float = 0.0,
 ) -> list[float]:
     """Orders = echelon target - echelon net inventory."""
     net_local = [on_hand + transit for on_hand, transit in zip(local_on_hand, in_transit)]
     echelon_net = echelon_inventory(net_local)
+    if customer_backorders > 0:
+        echelon_net = [net - customer_backorders for net in echelon_net]
     return [max(target - net, 0.0) for target, net in zip(echelon_targets, echelon_net)]
 
 
@@ -170,6 +173,7 @@ class GSMSimulationResult:
     mean_echelon_inventory: tuple[float, ...]
     fill_rate: float
     stockout_periods: int
+    mean_backorders: float = 0.0
 
 
 def simulate_serial_gsm(
@@ -181,11 +185,13 @@ def simulate_serial_gsm(
     mean_demand: float = 100.0,
     std_demand: float = 25.0,
     seed: int | None = 42,
+    backorders: bool = True,
 ) -> GSMSimulationResult:
     """
     Serial echelon base-stock simulation (Section 10.5).
 
     Customer demand at the last node; periodic echelon order-up-to at each stage.
+    Backorders accrue at the demand node when enabled.
     """
     n = len(lead_times)
     if n == 0 or len(allocation.echelon_order_up_to) != n:
@@ -197,34 +203,54 @@ def simulate_serial_gsm(
     on_hand = [allocation.nodes[i].order_up_to for i in range(n)]
     pipeline: list[list[tuple[int, float]]] = [[] for _ in range(n)]
     echelon_sums = [0.0] * n
+    backorder_trace: list[float] = []
+    customer_backorders = 0.0
     stockouts = 0
     total_demand = 0.0
     units_served = 0.0
+    last = n - 1
 
     for t in range(periods):
         for i in range(n):
             arrivals = [qty for due, qty in pipeline[i] if due == t]
             if arrivals:
-                on_hand[i] += sum(arrivals)
+                received = sum(arrivals)
+                on_hand[i] += received
+                if i == last and customer_backorders > 0:
+                    fulfilled = min(on_hand[i], customer_backorders)
+                    on_hand[i] -= fulfilled
+                    customer_backorders -= fulfilled
+                    units_served += fulfilled
             pipeline[i] = [(due, qty) for due, qty in pipeline[i] if due != t]
 
         transit = [sum(qty for _, qty in pipe) for pipe in pipeline]
         net_local = [oh + tr for oh, tr in zip(on_hand, transit)]
         echelon_net = echelon_inventory(net_local)
+        if customer_backorders > 0:
+            echelon_net = [e - customer_backorders for e in echelon_net]
         for i in range(n):
             echelon_sums[i] += echelon_net[i]
+        backorder_trace.append(customer_backorders)
 
-        last = n - 1
         d = demand[t]
         total_demand += d
-        served = min(on_hand[last], d)
-        units_served += served
-        on_hand[last] -= served
-        if on_hand[last] <= 0 and d > 0:
-            stockouts += 1
+        if on_hand[last] >= d:
+            on_hand[last] -= d
+            units_served += d
+        else:
+            served = on_hand[last]
+            units_served += served
+            short = d - served
+            if backorders:
+                customer_backorders += short
+            on_hand[last] = 0.0
+            if d > 0:
+                stockouts += 1
 
         if t % review_period == 0:
-            orders = echelon_orders(on_hand, transit, allocation.echelon_order_up_to)
+            orders = echelon_orders(
+                on_hand, transit, allocation.echelon_order_up_to, customer_backorders
+            )
             for i in range(n):
                 if orders[i] > 0:
                     pipeline[i].append((t + lead_times[i], orders[i]))
@@ -236,4 +262,5 @@ def simulate_serial_gsm(
         mean_echelon_inventory=mean_echelon,
         fill_rate=fill_rate,
         stockout_periods=stockouts,
+        mean_backorders=float(np.mean(backorder_trace)) if backorder_trace else 0.0,
     )

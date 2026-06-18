@@ -27,7 +27,10 @@ python examples/run_part3.py
 python examples/run_part4.py
 
 # Full pipeline + optional CSV export for Excel
-python examples/run_complete.py --simulate --export output/summary.csv
+python examples/run_complete.py --simulate --export output/summary.csv --excel excel-templates/analysis.xlsx
+
+# Pre-built workbook template
+python examples/build_excel_workbook.py
 ```
 
 Expected output includes `Q*`, reorder point `s`, order-up-to level `S`, safety stock, and simulated service levels.
@@ -51,7 +54,7 @@ Expected output includes `Q*`, reorder point `s`, order-up-to level `S`, safety 
 | Ch. 11 — Newsvendor | `src/newsvendor.py` | ✅ |
 | Ch. 12 — Histograms / KDE | `src/discrete_demand.py` | ✅ |
 | Ch. 13 — Simulation optimization | `src/simulation_opt.py` | ✅ |
-| Excel / Power BI templates | `excel-templates/`, `power-bi/` | 🔜 export layer |
+| Excel / Power BI templates | `excel-templates/`, `src/excel_export.py` | ✅ `.xlsx` export |
 
 ---
 
@@ -133,13 +136,13 @@ Ss = z_alpha * sigma_d * sqrt(tau)
 
 ## Roadmap
 
-1. **Excel export** — CSV export available via `run_complete.py --export`; native `.xlsx` templates planned
-2. **Lost sales** — `(R,S)` simulation with `lost_sales=True` (§5.3.2)
-3. **GSM simulation** — `simulate_serial_gsm` (§10.5)
+1. **Power BI** — Connect to CSV/Excel export from `run_complete.py`
+2. **GSM simulation** — `simulate_serial_gsm` with echelon backorders (§10.5) ✅
+3. **Lost sales** — `(R,S)` and `(s,Q)` with `lost_sales=True` (§5.3.2) ✅
 
-## Agent skills
+## Agent skills (Cursor + Claude Code)
 
-Cursor / Claude skills in `.cursor/skills/`:
+Four skills in `.cursor/skills/` — synced to `~/.claude/skills/`:
 
 | Skill | Chapters |
 |-------|----------|
@@ -147,6 +150,8 @@ Cursor / Claude skills in `.cursor/skills/`:
 | `vandeput-inventory-eoq-policies` | 2–5 |
 | `vandeput-inventory-service-cost` | 6–8 |
 | `vandeput-inventory-advanced` | 9–13 |
+
+See [.cursor/skills/README.md](.cursor/skills/README.md). Invoke in Claude Code with `/vandeput-inventory-optimization`.
 
 ---
 

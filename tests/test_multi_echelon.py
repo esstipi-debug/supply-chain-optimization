@@ -81,3 +81,13 @@ def test_gsm_simulation_runs():
     assert 0 <= result.fill_rate <= 1
     assert len(result.mean_echelon_inventory) == 3
 
+
+def test_gsm_backorders_improve_fill_rate():
+    from src.multi_echelon import optimize_serial_gsm, simulate_serial_gsm
+
+    alloc = optimize_serial_gsm([4, 3, 2], 100, 25, [1, 2, 4], 0.95, 1.0)
+    with_bo = simulate_serial_gsm(alloc, [4, 3, 2], periods=3000, seed=5, backorders=True)
+    lost = simulate_serial_gsm(alloc, [4, 3, 2], periods=3000, seed=5, backorders=False)
+    assert with_bo.fill_rate >= lost.fill_rate
+
+

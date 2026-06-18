@@ -26,8 +26,8 @@ from src.distributions import (
     safety_stock_gamma,
     select_distribution,
 )
+from src.excel_export import gsm_allocation_to_dict, write_analysis_workbook
 from src.export import write_policy_comparison, write_summary_csv
-from src.eoq import EOQResult, compute_eoq, total_cost
 from src.fill_rate import (
     FillRateResult,
     fill_rate_from_inventory,
@@ -135,4 +135,6 @@ __all__ = [
     "total_cost",
     "write_policy_comparison",
     "write_summary_csv",
+    "write_analysis_workbook",
+    "gsm_allocation_to_dict",
 ]

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0] - 2026-06-18
+
+### Added
+- Native Excel export `src/excel_export.py` and `examples/build_excel_workbook.py`
+- `--excel` flag on `run_complete.py`
+- GSM simulation with customer backorders at demand node
+- `lost_sales` on `(s,Q)` simulation
+- Agent skills README; skills synced to Claude Code
+- Tests: Excel export, GSM backorders (41 total)
+
+### Changed
+- `requirements.txt`: openpyxl, pytest
+- Excel templates README: live `.xlsx` workflow
+
 ## [1.1.0] - 2026-06-18
 
 ### Added
