@@ -1,6 +1,9 @@
 """Tests for the scm_agent orchestrator package."""
 
+import pytest
+
 from scm_agent import llm
+from scm_agent.registry import Prepared, Produced, Tool, ToolRegistry
 from scm_agent.types import JobRequest, JobResult
 
 
@@ -56,3 +59,45 @@ def test_claude_provider_reports_available_without_network():
     # available() must not require the SDK or a network call
     p = llm.ClaudeProvider(api_key="sk-test", model="claude-opus-4-8")
     assert p.available() is True
+
+
+def _dummy_tool(key, keywords, requires_data=True):
+    return Tool(
+        key=key, title=key.title(), description=f"{key} tool",
+        intent_keywords=tuple(keywords), requires_data=requires_data,
+        prepare=lambda req, prov: Prepared(status="ok", payload=None),
+        run=lambda payload, params: Produced(report=None, summary="ok"),
+        qa=lambda report: [],
+        deliver=lambda report, out_dir, client: {},
+    )
+
+
+def test_registry_register_get_list():
+    reg = ToolRegistry()
+    t = _dummy_tool("inventory_optimization", ["reorder", "inventory"])
+    reg.register(t)
+    assert reg.get("inventory_optimization") is t
+    assert [x.key for x in reg.list()] == ["inventory_optimization"]
+
+
+def test_registry_rejects_duplicate_key():
+    reg = ToolRegistry()
+    reg.register(_dummy_tool("pricing", ["price"]))
+    with pytest.raises(ValueError):
+        reg.register(_dummy_tool("pricing", ["price"]))
+
+
+def test_registry_get_unknown_raises_keyerror():
+    reg = ToolRegistry()
+    with pytest.raises(KeyError):
+        reg.get("nope")
+
+
+def test_registry_match_scores_by_keyword_hits():
+    reg = ToolRegistry()
+    reg.register(_dummy_tool("inventory_optimization", ["reorder", "safety stock", "inventory"]))
+    reg.register(_dummy_tool("pricing", ["price", "elasticity", "margin"]))
+    ranked = reg.match("set up reorder points and safety stock for my inventory")
+    assert ranked[0][0].key == "inventory_optimization"
+    assert ranked[0][1] >= 3  # three keyword hits
+    assert ranked[1][1] == 0  # pricing has no hits
