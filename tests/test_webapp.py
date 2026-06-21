@@ -3,6 +3,13 @@
 import pytest
 
 pytest.importorskip("fastapi")
+# /api/jobs uses a multipart Form route, so importing webapp.app raises without
+# python-multipart — skip the whole module (under either import name) rather than
+# error at collection.
+try:
+    import python_multipart  # noqa: F401  (canonical name, python-multipart >= 0.0.26)
+except ImportError:
+    pytest.importorskip("multipart")  # legacy name; skips the module if also absent
 from fastapi.testclient import TestClient  # noqa: E402
 
 from webapp.app import JOBS_OUTPUT_DIR, app  # noqa: E402
