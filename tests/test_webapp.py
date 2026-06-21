@@ -110,3 +110,68 @@ def test_static_assets_served():
 def test_health():
     d = client.get("/api/health").json()
     assert d["ok"] is True and d["skus"] == 8
+
+
+# ---------------------------------------------------------------------------
+# python-multipart guard — do NOT use pytest.importorskip at module level;
+# that would skip the existing 13 webapp tests when multipart is absent.
+# ---------------------------------------------------------------------------
+try:
+    import multipart  # noqa: F401  (python-multipart, classic import name)
+    _HAS_MULTIPART = True
+except ImportError:
+    try:
+        import python_multipart  # noqa: F401  (renamed in newer releases)
+        _HAS_MULTIPART = True
+    except ImportError:
+        _HAS_MULTIPART = False
+
+requires_multipart = pytest.mark.skipif(not _HAS_MULTIPART, reason="python-multipart not installed")
+
+
+@requires_multipart
+def test_jobs_leadership_via_params_no_file():
+    r = client.post("/api/jobs", data={
+        "brief": "evaluate our SC leadership",
+        "job_type": "leadership_chain",
+        "params": '{"scores": "3 2 3 1 1", "name": "Equipo X"}',
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["tool"] == "leadership_chain"
+    assert "chart" in body["deliverables"]
+    assert body["download_urls"]["chart"].startswith("/jobs-output/")
+
+
+@requires_multipart
+def test_jobs_inventory_with_file_upload():
+    with open("data/sample_demand_portfolio.csv", "rb") as fh:
+        r = client.post(
+            "/api/jobs",
+            data={"brief": "set up reorder points and safety stock"},
+            files={"file": ("demand.csv", fh, "text/csv")},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok" and body["tool"] == "inventory_optimization"
+    assert "excel" in body["download_urls"]
+
+
+@requires_multipart
+def test_jobs_needs_data_status():
+    r = client.post("/api/jobs", data={"brief": "set up reorder points"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "needs_data"
+
+
+@requires_multipart
+def test_jobs_downloaded_file_is_served():
+    r = client.post("/api/jobs", data={
+        "brief": "evaluate leadership", "job_type": "leadership_chain",
+        "params": '{"scores": "3 3 3 3 3"}',
+    }).json()
+    url = r["download_urls"]["report"]
+    got = client.get(url)
+    assert got.status_code == 200
+    assert "CHAIN" in got.text

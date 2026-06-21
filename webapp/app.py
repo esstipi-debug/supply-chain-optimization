@@ -21,10 +21,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from fastapi import FastAPI, HTTPException, Query  # noqa: E402
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
+from scm_agent import Orchestrator  # noqa: E402
 from src.constraints import InventoryItem, allocate_under_budget  # noqa: E402
 from src.forecasting import ForecastResult, forecast_demand  # noqa: E402
 from src.policies import continuous_review_sq, periodic_review_rs  # noqa: E402
@@ -32,8 +33,19 @@ from src.sources import CsvDemandSource  # noqa: E402
 
 DATA_FILE = _REPO_ROOT / "data" / "sample_demand_portfolio.csv"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+JOBS_OUTPUT_DIR = _REPO_ROOT / "webapp" / "_jobs_output"
+JOBS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 PERIODS_PER_YEAR = 52.0
 MAX_LEAD_PERIODS = 52.0
+
+_ORCHESTRATOR: Orchestrator | None = None
+
+
+def _get_orchestrator() -> Orchestrator:
+    global _ORCHESTRATOR
+    if _ORCHESTRATOR is None:
+        _ORCHESTRATOR = Orchestrator()
+    return _ORCHESTRATOR
 
 
 class SafeJSONResponse(JSONResponse):
@@ -272,9 +284,56 @@ def api_health() -> dict:
     return {"ok": True, "skus": len(_load_forecasts())}
 
 
+@app.post("/api/jobs")
+async def api_jobs(
+    brief: str = Form(...),
+    client: str = Form("Client"),
+    job_type: str | None = Form(None),
+    params: str = Form("{}"),
+    file: UploadFile | None = File(None),
+) -> dict:
+    try:
+        parsed_params = json.loads(params) if params else {}
+        if not isinstance(parsed_params, dict):
+            raise ValueError("params must be a JSON object")
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=f"invalid params JSON: {exc}") from exc
+
+    import tempfile
+
+    job_dir = Path(tempfile.mkdtemp(dir=JOBS_OUTPUT_DIR))
+    data_path: str | None = None
+    if file is not None and file.filename:
+        upload = job_dir / file.filename
+        upload.write_bytes(await file.read())
+        data_path = str(upload)
+
+    result = _get_orchestrator().run(
+        brief, data_path=data_path, overrides=parsed_params,
+        job_type=job_type or None, client=client, out_dir=job_dir,
+    )
+
+    download_urls: dict[str, str] = {}
+    for name, path in result.deliverables.items():
+        rel = Path(path).resolve().relative_to(JOBS_OUTPUT_DIR.resolve())
+        download_urls[name] = "/jobs-output/" + rel.as_posix()
+
+    return {
+        "status": result.status,
+        "tool": result.tool,
+        "confidence": result.confidence,
+        "summary": result.summary,
+        "deliverables": result.deliverables,
+        "download_urls": download_urls,
+        "qa_issues": result.qa_issues,
+        "clarifications": result.clarifications,
+    }
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/jobs-output", StaticFiles(directory=str(JOBS_OUTPUT_DIR)), name="jobs-output")
