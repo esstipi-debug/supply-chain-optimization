@@ -76,6 +76,17 @@ from src.newsvendor import (
 )
 from src.policies import PolicyResult, continuous_review_sq, periodic_review_rs
 from src.powerbi_export import PowerBIDatasetPaths, build_powerbi_dataset
+from src.pricing import (
+    ElasticityFit,
+    PriceRecommendation,
+    demand_at,
+    estimate_elasticity,
+    fit_linear_demand,
+    markdown_price,
+    optimal_price_constant_elasticity,
+    optimal_price_linear,
+    recommend_price,
+)
 from src.risk_period import RiskPeriodStats, demand_over_risk_period
 from src.safety_stock import SafetyStockResult, safety_stock, service_level_factor
 from src.simulation import SimulationResult, simulate_rs_policy, simulate_sq_policy
@@ -105,6 +116,15 @@ __all__ = [
     "round_up_to_multiple",
     "shelf_life_max_quantity",
     "total_investment",
+    "ElasticityFit",
+    "PriceRecommendation",
+    "estimate_elasticity",
+    "demand_at",
+    "optimal_price_constant_elasticity",
+    "fit_linear_demand",
+    "optimal_price_linear",
+    "markdown_price",
+    "recommend_price",
     "CostBreakdown",
     "DemandDistribution",
     "DiscretePMF",

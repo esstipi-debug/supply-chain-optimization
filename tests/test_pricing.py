@@ -1,0 +1,80 @@
+"""Tests for the price-optimization module."""
+
+import numpy as np
+import pytest
+
+from src.pricing import (
+    demand_at,
+    estimate_elasticity,
+    fit_linear_demand,
+    markdown_price,
+    optimal_price_constant_elasticity,
+    optimal_price_linear,
+    recommend_price,
+)
+
+
+def test_estimate_elasticity_recovers_known_value():
+    rng = np.random.default_rng(0)
+    prices = np.linspace(5, 25, 40)
+    quantities = 5000 * prices ** (-2.0) * rng.normal(1.0, 0.03, size=prices.size)
+    fit = estimate_elasticity(prices, quantities)
+    assert fit.identified
+    assert fit.elasticity == pytest.approx(-2.0, abs=0.15)
+    assert fit.r_squared > 0.9
+
+
+def test_estimate_elasticity_unidentified_without_variation():
+    fit = estimate_elasticity([10, 10, 10], [100, 98, 102])
+    assert fit.identified is False
+
+
+def test_optimal_price_constant_elasticity():
+    assert optimal_price_constant_elasticity(10, -2) == pytest.approx(20)
+    assert optimal_price_constant_elasticity(10, -3) == pytest.approx(15)
+    assert optimal_price_constant_elasticity(10, -0.5) is None  # inelastic
+    with pytest.raises(ValueError):
+        optimal_price_constant_elasticity(0, -2)
+
+
+def test_linear_demand_fit_and_optimal_price():
+    prices = np.array([10, 20, 30, 40, 50], dtype=float)
+    quantities = 1000 - 8 * prices  # a=1000, b=8
+    a, b = fit_linear_demand(prices, quantities)
+    assert a == pytest.approx(1000, rel=1e-6)
+    assert b == pytest.approx(8, rel=1e-6)
+    # p* = (a/b + c)/2 = (125 + 25)/2 = 75
+    assert optimal_price_linear(a, b, 25) == pytest.approx(75)
+
+
+def test_demand_at():
+    fit = estimate_elasticity(np.linspace(5, 25, 20), 1000 * np.linspace(5, 25, 20) ** -1.5)
+    assert demand_at(fit, 10) > demand_at(fit, 20)  # downward sloping
+    with pytest.raises(ValueError):
+        demand_at(fit, 0)
+
+
+def test_markdown_price_lowers_to_clear_stock():
+    fit = estimate_elasticity(np.linspace(5, 25, 20), 2000 * np.linspace(5, 25, 20) ** -2.0)
+    p = markdown_price(remaining_units=400, periods_left=4, fit=fit, current_price=20.0)
+    assert p <= 20.0  # markdown never raises
+    assert p > 0
+
+
+def test_recommend_price_elastic_data():
+    rng = np.random.default_rng(1)
+    prices = np.linspace(8, 24, 30)
+    quantities = 8000 * prices ** (-2.0) * rng.normal(1.0, 0.02, size=prices.size)
+    rec = recommend_price(prices, quantities, unit_cost=10.0)
+    assert rec.optimal_price is not None
+    assert rec.optimal_price > 10.0  # above cost
+    assert rec.action in {"raise", "lower", "hold"}
+    assert rec.elasticity < -1
+
+
+def test_recommend_price_inelastic_and_insufficient():
+    rng = np.random.default_rng(2)
+    prices = np.linspace(8, 24, 30)
+    inelastic_q = 500 * prices ** (-0.4) * rng.normal(1.0, 0.02, size=prices.size)
+    assert recommend_price(prices, inelastic_q, 5.0).action == "inelastic"
+    assert recommend_price([10, 10, 10], [100, 100, 100], 5.0).action == "insufficient_data"

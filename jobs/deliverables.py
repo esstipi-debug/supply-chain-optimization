@@ -15,8 +15,16 @@ from openpyxl.utils import get_column_letter
 from src.export import write_summary_csv
 
 from .inventory_optimization import JobReport, SkuRecommendation
+from .pricing import PricingRec, PricingReport
 
 STATUS_LABEL = {"ok": "On track", "high_bias": "High bias — review", "review": "Intermittent — review"}
+ACTION_LABEL = {
+    "raise": "Raise price",
+    "lower": "Lower price",
+    "hold": "Hold price",
+    "inelastic": "Inelastic — test higher",
+    "insufficient_data": "Insufficient price variation",
+}
 
 
 def _row(r: SkuRecommendation) -> dict:
@@ -178,4 +186,104 @@ def write_all(report: JobReport, out_dir: str | Path, *, client: str = "Client")
         "excel": write_excel(report, d / "inventory_plan.xlsx"),
         "report": write_report_md(report, d / "report.md", client=client),
         "csv": write_csv(report, d / "summary.csv"),
+    }
+
+
+# ---- pricing deliverables ----------------------------------------------------
+
+def _price_row(r: PricingRec) -> dict:
+    return {
+        "product_id": r.product_id,
+        "current_price": round(r.current_price, 2),
+        "optimal_price": round(r.optimal_price, 2) if r.optimal_price is not None else "",
+        "unit_cost": round(r.unit_cost, 2),
+        "elasticity": round(r.elasticity, 2),
+        "r_squared": round(r.r_squared, 2),
+        "obs": r.n_points,
+        "demand_change_pct": round(r.demand_change_pct, 1) if r.demand_change_pct is not None else "",
+        "profit_uplift_pct": round(r.profit_uplift_pct, 1) if r.profit_uplift_pct is not None else "",
+        "action": ACTION_LABEL[r.action],
+        "confident": "yes" if r.confident else "no",
+    }
+
+
+def write_pricing_csv(report: PricingReport, path: str | Path) -> Path:
+    return write_summary_csv([_price_row(r) for r in report.recommendations], path)
+
+
+def write_pricing_report_md(report: PricingReport, path: str | Path, *, client: str = "Client") -> Path:
+    """Written price-optimization report: summary, per-SKU table, methodology."""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    lines: list[str] = []
+    lines.append(f"# Price Optimization — {client}\n")
+    lines.append("## Executive summary\n")
+    lines.append(
+        f"Analyzed **{report.n_skus} SKUs**. **{report.n_actionable}** have a confident price move "
+        f"(raise/lower); {report.n_inelastic} are inelastic and {report.n_insufficient} lack enough "
+        "price variation to estimate. Recommendations maximize unit margin under a constant-elasticity "
+        "demand model fitted to each SKU's price/quantity history."
+    )
+    lines.append("")
+    lines.append("## Recommended price per SKU\n")
+    lines.append("| SKU | Current | Optimal | Unit cost | Elasticity | R² | Obs | Δ demand | Profit uplift | Action | Confident |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|")
+    for r in report.recommendations:
+        opt = f"${r.optimal_price:,.2f}" if r.optimal_price is not None else "—"
+        dchg = f"{r.demand_change_pct:+.0f}%" if r.demand_change_pct is not None else "—"
+        upl = f"{r.profit_uplift_pct:+.0f}%" if r.profit_uplift_pct is not None else "—"
+        lines.append(
+            f"| {r.product_id} | ${r.current_price:,.2f} | {opt} | ${r.unit_cost:,.2f} | "
+            f"{r.elasticity:.2f} | {r.r_squared:.2f} | {r.n_points} | {dchg} | {upl} | "
+            f"{ACTION_LABEL[r.action]} | {'yes' if r.confident else 'no'} |"
+        )
+    lines.append("")
+
+    lines.append("## Methodology\n")
+    lines.append("- **Elasticity:** per-SKU log-log regression of quantity on price (ε = slope of ln q vs ln p), with R² as a fit-quality signal.")
+    lines.append("- **Optimal price:** constant-elasticity profit maximum `p* = c · ε/(ε+1)`, valid when demand is elastic (ε < −1). Inelastic SKUs (ε ≥ −1) have no interior optimum — test a higher price.")
+    lines.append("- **Profit uplift / demand change:** modeled against the fitted curve relative to the current (median) price.")
+    lines.append("- **Confidence:** flagged only when R² ≥ 0.5, ≥ 4 price observations, and the move is within a sane range of the current price.\n")
+    lines.append("## Assumptions & caveats\n")
+    cr = report.params["cost_ratio"]
+    lines.append(f"- Unit cost {'taken from the data' if report.params['has_cost_column'] else f'assumed at {cr * 100:.0f}% of current price'} (no cost column → margin is an estimate).")
+    lines.append("- A single-product, constant-elasticity model: it ignores cross-product effects, competitor moves, and capacity. Validate before repricing, ideally with a live price test.")
+    lines.append("")
+    lines.append("_Decision support generated from the client's price/quantity history._")
+
+    out.write_text("\n".join(lines), encoding="utf-8")
+    return out
+
+
+def write_pricing_excel(report: PricingReport, path: str | Path) -> Path:
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Price recommendations"
+    rows = [_price_row(r) for r in report.recommendations]
+    headers = list(rows[0].keys()) if rows else ["product_id"]
+    fill = PatternFill("solid", fgColor="1F2A44")
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=c, value=h.replace("_", " "))
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = fill
+    for ri, row in enumerate(rows, 2):
+        for ci, h in enumerate(headers, 1):
+            ws.cell(row=ri, column=ci, value=row[h])
+    for ci, h in enumerate(headers, 1):
+        width = max(len(h), *(len(str(row[h])) for row in rows)) if rows else len(h)
+        ws.column_dimensions[get_column_letter(ci)].width = min(max(width + 2, 10), 28)
+    ws.freeze_panes = "A2"
+    wb.save(out)
+    return out
+
+
+def write_pricing_all(report: PricingReport, out_dir: str | Path, *, client: str = "Client") -> dict[str, Path]:
+    d = Path(out_dir)
+    return {
+        "excel": write_pricing_excel(report, d / "price_recommendations.xlsx"),
+        "report": write_pricing_report_md(report, d / "pricing_report.md", client=client),
+        "csv": write_pricing_csv(report, d / "pricing_summary.csv"),
     }

@@ -59,6 +59,9 @@ python -m uvicorn webapp.app:app --reload   # http://localhost:8000
 
 # Fulfill a client job from any CSV/Excel -> Excel + report deliverables
 python examples/run_inventory_job.py --data client_demand.csv --budget 50000 --client "Acme Co"
+
+# Price-optimization job (needs price + quantity history)
+python examples/run_pricing_job.py --data sales.csv --client "Acme Co"
 ```
 
 Expected output includes `Q*`, reorder point `s`, order-up-to level `S`, safety stock, and simulated service levels.
@@ -80,6 +83,7 @@ Expected output includes `Q*`, reorder point `s`, order-up-to level `S`, safety 
 | Ch. 9 — Gamma demand | `src/distributions.py` | ✅ |
 | Ch. 10 — Multi-echelon GSM | `src/multi_echelon.py` | ✅ allocation + simulation |
 | Ch. 11 — Newsvendor | `src/newsvendor.py` | ✅ |
+| Price optimization | `src/pricing.py` | ✅ elasticity / optimal price / markdown |
 | Ch. 12 — Histograms / KDE | `src/discrete_demand.py` | ✅ |
 | Ch. 13 — Simulation optimization | `src/simulation_opt.py` | ✅ grid R + Ss |
 | Batch multi-SKU | `src/batch.py` | ✅ |

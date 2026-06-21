@@ -6,8 +6,11 @@ import pytest
 from jobs import deliverables, qa
 from jobs.intake import detect_columns, normalize, prepare
 from jobs.inventory_optimization import run
+from jobs.pricing import prepare_pricing
+from jobs.pricing import run as run_pricing
 
 PORTFOLIO = "data/sample_demand_portfolio.csv"
+PRICING = "data/sample_pricing.csv"
 
 
 def test_detect_columns_from_arbitrary_headers():
@@ -95,3 +98,40 @@ def test_deliverables_written(tmp_path):
     md = written["report"].read_text(encoding="utf-8")
     assert "Inventory Optimization — Acme" in md
     assert "Methodology" in md
+
+
+# ---- pricing playbook --------------------------------------------------------
+
+def test_pricing_playbook_runs_and_passes_qa():
+    demand = prepare_pricing(PRICING)
+    assert "price" in demand.columns
+    report = run_pricing(demand)
+    assert report.n_skus == 6
+    assert qa.verify_pricing(report) == []
+    # elastic SKUs yield a confident move; inelastic ones are flagged
+    assert report.n_actionable >= 1
+    assert report.n_inelastic >= 1
+
+
+def test_pricing_optimal_above_cost_for_actionable():
+    report = run_pricing(prepare_pricing(PRICING))
+    for r in report.recommendations:
+        if r.action in {"raise", "lower"}:
+            assert r.optimal_price is not None and r.optimal_price > r.unit_cost
+            assert r.elasticity < -1
+
+
+def test_pricing_qa_catches_tampered_rec():
+    report = run_pricing(prepare_pricing(PRICING))
+    actionable = next(r for r in report.recommendations if r.action in {"raise", "lower"})
+    object.__setattr__(actionable, "optimal_price", actionable.unit_cost * 0.5)  # below cost
+    assert any("cost" in i for i in qa.verify_pricing(report))
+
+
+def test_pricing_deliverables_written(tmp_path):
+    report = run_pricing(prepare_pricing(PRICING))
+    written = deliverables.write_pricing_all(report, tmp_path, client="Acme")
+    assert all(p.exists() for p in written.values())
+    md = written["report"].read_text(encoding="utf-8")
+    assert "Price Optimization — Acme" in md
+    assert "Elasticity" in md

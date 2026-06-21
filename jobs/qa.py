@@ -8,6 +8,7 @@ out-of-range allocation) so the human only reviews sound output.
 from __future__ import annotations
 
 from .inventory_optimization import JobReport
+from .pricing import PricingReport
 
 TOL = 1e-6
 
@@ -54,3 +55,33 @@ def verify(report: JobReport) -> list[str]:
 
 def passed(report: JobReport) -> bool:
     return not verify(report)
+
+
+def verify_pricing(report: PricingReport) -> list[str]:
+    """Return a list of QA issues for a pricing report. Empty list = passed."""
+    issues: list[str] = []
+    if not report.recommendations:
+        issues.append("pricing report has no recommendations")
+
+    for r in report.recommendations:
+        if r.current_price < -TOL:
+            issues.append(f"{r.product_id}: negative current price")
+        if r.action in {"raise", "lower"}:
+            if r.optimal_price is None or r.optimal_price <= 0:
+                issues.append(f"{r.product_id}: actionable but no positive optimal price")
+            elif r.optimal_price <= r.unit_cost:
+                issues.append(f"{r.product_id}: optimal price at or below unit cost")
+            if r.elasticity >= -1:
+                issues.append(f"{r.product_id}: actionable but demand is inelastic")
+            if r.confident and r.profit_uplift_pct is not None and r.profit_uplift_pct < -0.5:
+                issues.append(f"{r.product_id}: 'optimal' price lowers modeled profit")
+        elif r.action == "inelastic" and r.elasticity < -1:
+            issues.append(f"{r.product_id}: flagged inelastic but elasticity < -1")
+        elif r.action == "insufficient_data" and r.optimal_price is not None:
+            issues.append(f"{r.product_id}: insufficient data but an optimal price was set")
+
+    return issues
+
+
+def pricing_passed(report: PricingReport) -> bool:
+    return not verify_pricing(report)

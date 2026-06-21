@@ -41,8 +41,12 @@ If QA fails, nothing is written and the issues are printed — you never ship ba
 | "set up reorder points / safety stock" | `inventory_optimization` | policy per SKU + report |
 | "EOQ / how much to order" | `inventory_optimization` | Q*, order-up-to |
 | "fit my inventory to a budget" | `inventory_optimization` (`--budget`) | scaled allocation + feasibility |
+| "price optimization / elasticity analysis" | `pricing` | optimal price per SKU + profit uplift |
+| "what price maximizes profit / markdown" | `pricing` | elasticity, price move, report |
 
-See [SAMPLE_REPORT.md](SAMPLE_REPORT.md) for an example deliverable.
+Run pricing: `python examples/run_pricing_job.py --data sales.csv --client "Acme Co"`
+(needs price + quantity history). See [SAMPLE_REPORT.md](SAMPLE_REPORT.md) and
+[SAMPLE_PRICING_REPORT.md](SAMPLE_PRICING_REPORT.md) for example deliverables.
 
 ## Intake — handling any client schema
 

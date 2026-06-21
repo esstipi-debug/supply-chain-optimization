@@ -1,6 +1,22 @@
 # Changelog
 
-## [2.6.0] - 2026-06-19
+## [2.7.0] - 2026-06-19
+
+### Added
+- **Price optimization** (`src/pricing.py`): demand-elasticity estimation
+  (log-log fit), profit-maximizing price for constant-elasticity (`p* = c·ε/(ε+1)`)
+  and linear demand, markdown/clearance pricing, and `recommend_price` with
+  confidence + action. Extends the engine's newsvendor / volume-discount economics.
+- **Pricing playbook** (`jobs/pricing.py`): client price/quantity history →
+  elasticity → optimal price per SKU with profit-uplift; QA (`qa.verify_pricing`)
+  + deliverables (Excel + report) reusing the job-fulfillment pipeline.
+- `scripts/generate_pricing_sample.py` + `data/sample_pricing.csv`;
+  `examples/run_pricing_job.py`; `jobs/SAMPLE_PRICING_REPORT.md`.
+- 12 tests (132 total): pricing engine + pricing playbook.
+
+### Changed
+- `src/__init__.py` exports the pricing API; `jobs/README.md` lists the pricing
+  job type.
 
 ### Added
 - **Job-fulfillment layer** (`jobs/`) — package the engine for real supply-chain
