@@ -215,3 +215,34 @@ def test_warehouse_capability_qa_fails_on_bad_params(tmp_path: Path) -> None:
     )
     assert result.status == "qa_failed"
     assert result.qa_issues
+
+
+# --- Task 7: Webapp routes ---
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from webapp.app import app  # noqa: E402
+
+
+def test_api_warehouse_returns_layout_json() -> None:
+    client = TestClient(app)
+    resp = client.get("/api/warehouse", params={"modules": 4, "levels": 3})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["racks"]) == 4
+    assert data["building"]["levels"] == 3
+
+
+def test_api_warehouse_rejects_invalid_geometry() -> None:
+    client = TestClient(app)
+    resp = client.get("/api/warehouse", params={"modules": 400})
+    assert resp.status_code == 400
+    assert "qa_issues" in resp.json()["detail"]
+
+
+def test_warehouse_page_renders_html() -> None:
+    client = TestClient(app)
+    resp = client.get("/warehouse", params={"modules": 4})
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "<html" in resp.text
