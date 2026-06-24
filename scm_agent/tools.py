@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from jobs import (
@@ -10,19 +11,24 @@ from jobs import (
     cost_to_serve_job,
     ddmrp_job,
     deliverables,
+    financial_kpis_job,
     intake,
     inventory_deliverable,
     landed_cost_job,
     leadership,
     qa,
+    reconciliation_job,
+    returns_job,
     sop_deliverable,
     sop_job,
     sourcing_job,
+    whatif_job,
 )
 from jobs.inventory_optimization import run as run_inventory
 from jobs.pricing import prepare_pricing
 from jobs.pricing import run as run_pricing
 
+from . import tool_options
 from .llm import LLMProvider
 from .registry import Prepared, Produced, Tool, ToolRegistry
 from .types import JobRequest
@@ -64,6 +70,11 @@ def _inventory_run(payload: object, params: dict) -> Produced:
         order_cost=params.get("order_cost", 75.0),
         budget=params.get("budget"),
         periods_per_year=params.get("periods_per_year", 52.0),
+        service_levels=params.get("service_levels"),
+        differentiate_by_class=params.get("differentiate_by_class", False),
+        lead_times=params.get("lead_times"),
+        observed_fill_rates=params.get("observed_fill_rates"),
+        target_fill_rate=params.get("target_fill_rate", 0.95),
     )
     summary = (
         f"Analyzed {report.n_skus} SKUs; recommended inventory investment "
@@ -82,12 +93,14 @@ def inventory_tool() -> Tool:
             "eoq", "service level", "reorder point", "order quantity",
         ),
         requires_data=True,
+        options=tool_options.inventory_options,
         prepare=_inventory_prepare,
         run=_inventory_run,
         qa=lambda report: qa.verify(report),
         deliver=lambda report, out_dir, client: deliverables.write_all(report, out_dir, client=client),
-        deck=lambda report, out_dir, client, citations, confidence: inventory_deliverable.build(
-            report, client=client, citations=tuple(citations), confidence=confidence
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            inventory_deliverable.build(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
         ).write_all(out_dir),
     )
 
@@ -123,6 +136,7 @@ def pricing_tool() -> Tool:
             "optimal price", "what price", "profit",
         ),
         requires_data=True,
+        options=tool_options.pricing_options,
         prepare=_pricing_prepare,
         run=_pricing_run,
         qa=lambda report: qa.verify_pricing(report),
@@ -184,6 +198,7 @@ def leadership_tool() -> Tool:
             "chain model", "manager", "team",
         ),
         requires_data=False,
+        options=tool_options.leadership_options,
         prepare=_leadership_prepare,
         run=_leadership_run,
         qa=lambda profile: qa.verify_leadership(profile),
@@ -233,13 +248,17 @@ def cost_to_serve_tool() -> Tool:
             "net to serve", "loss-making", "whale curve", "profitability by",
         ),
         requires_data=True,
+        options=tool_options.cost_to_serve_options,
         prepare=_cost_to_serve_prepare,
         run=_cost_to_serve_run,
         qa=lambda report: cost_to_serve_job.verify(report),
         deliver=lambda report, out_dir, client: cost_to_serve_job.write_operational(report, out_dir, client),
-        deck=lambda report, out_dir, client, citations, confidence: cost_to_serve_deliverable.build(
-            report.portfolio, working_cap=report.working_cap, cash_release=report.cash_release,
-            client=client, citations=tuple(citations), confidence=confidence,
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            cost_to_serve_deliverable.build(
+                report.portfolio, working_cap=report.working_cap, cash_release=report.cash_release,
+                client=client, citations=tuple(citations), confidence=confidence,
+            ),
+            options=tuple(options),
         ).write_all(out_dir),
     )
 
@@ -286,12 +305,14 @@ def sop_tool() -> Tool:
             "monthly demand plan",
         ),
         requires_data=True,
+        options=lambda report: report.outcome,
         prepare=_sop_prepare,
         run=_sop_run,
         qa=lambda review: sop_job.verify(review),
         deliver=lambda review, out_dir, client: sop_job.write_operational(review, out_dir, client),
-        deck=lambda review, out_dir, client, citations, confidence: sop_deliverable.build(
-            review, client=client, citations=tuple(citations),
+        deck=lambda review, out_dir, client, citations, confidence, options: replace(
+            sop_deliverable.build(review, client=client, citations=tuple(citations)),
+            options=tuple(options),
         ).write_all(out_dir),
     )
 
@@ -333,12 +354,14 @@ def abc_xyz_tool() -> Tool:
             "xyz analysis", "pareto", "sku classification", "classify", "classification",
         ),
         requires_data=True,
+        options=tool_options.abc_xyz_options,
         prepare=_abc_xyz_prepare,
         run=_abc_xyz_run,
         qa=lambda report: abc_xyz_job.verify(report),
         deliver=lambda report, out_dir, client: abc_xyz_job.write_operational(report, out_dir, client),
-        deck=lambda report, out_dir, client, citations, confidence: abc_xyz_job.build_deck(
-            report, client=client, citations=tuple(citations), confidence=confidence,
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            abc_xyz_job.build_deck(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
         ).write_all(out_dir),
     )
 
@@ -376,12 +399,14 @@ def sourcing_tool() -> Tool:
             "otif", "difot", "best supplier",
         ),
         requires_data=True,
+        options=lambda report: report.outcome,
         prepare=_sourcing_prepare,
         run=_sourcing_run,
         qa=lambda report: sourcing_job.verify(report),
         deliver=lambda report, out_dir, client: sourcing_job.write_operational(report, out_dir, client),
-        deck=lambda report, out_dir, client, citations, confidence: sourcing_job.build_deck(
-            report, client=client, citations=tuple(citations), confidence=confidence,
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            sourcing_job.build_deck(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
         ).write_all(out_dir),
     )
 
@@ -419,12 +444,14 @@ def ddmrp_tool() -> Tool:
             "buffer profile", "net flow", "decoupling point", "red yellow green",
         ),
         requires_data=True,
+        options=tool_options.ddmrp_options,
         prepare=_ddmrp_prepare,
         run=_ddmrp_run,
         qa=lambda report: ddmrp_job.verify(report),
         deliver=lambda report, out_dir, client: ddmrp_job.write_operational(report, out_dir, client),
-        deck=lambda report, out_dir, client, citations, confidence: ddmrp_job.build_deck(
-            report, client=client, citations=tuple(citations), confidence=confidence,
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            ddmrp_job.build_deck(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
         ).write_all(out_dir),
     )
 
@@ -462,12 +489,14 @@ def landed_cost_tool() -> Tool:
             "tariff", "freight cost", "import cost", "total landed",
         ),
         requires_data=True,
+        options=tool_options.landed_cost_options,
         prepare=_landed_cost_prepare,
         run=_landed_cost_run,
         qa=lambda report: landed_cost_job.verify(report),
         deliver=lambda report, out_dir, client: landed_cost_job.write_operational(report, out_dir, client),
-        deck=lambda report, out_dir, client, citations, confidence: landed_cost_job.build_deck(
-            report, client=client, citations=tuple(citations), confidence=confidence,
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            landed_cost_job.build_deck(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
         ).write_all(out_dir),
     )
 
@@ -522,6 +551,213 @@ def warehouse_layout_tool() -> Tool:
         run=_warehouse_run,
         qa=lambda report: validate_layout(report[0]),
         deliver=_warehouse_deliver,
+        options=lambda report: tool_options.warehouse_options(report[0]),
+    )
+
+
+# ---- whatif (sensitivity / what-if over the inventory policy cost) -----------
+
+def _whatif_prepare(request: JobRequest, provider: LLMProvider) -> Prepared:
+    if not request.data_path:
+        return Prepared(status="needs_data", messages=["a drivers CSV (driver, base, low, high) is required"])
+    try:
+        payload = whatif_job.prepare(request.data_path, request.params)
+    except (ValueError, FileNotFoundError) as exc:
+        return Prepared(status="needs_data", messages=[str(exc)])
+    return Prepared(status="ok", payload=payload)
+
+
+def _whatif_run(payload: object, params: dict) -> Produced:
+    report = whatif_job.run(
+        payload,
+        metric=params.get("metric", "annual_cost"),
+        budget_pct=params.get("budget_pct", 0.10),
+        maximize=params.get("maximize", False),
+    )
+    be = f"; budget break-even at {report.breakeven_value:,.2f}" if report.breakeven_found else ""
+    return Produced(report=report, summary=(
+        f"Swept {report.n_drivers} assumption(s); '{report.top_driver}' moves {report.metric} most "
+        f"(range {report.optimistic_value:,.0f}-{report.pessimistic_value:,.0f}){be}."
+    ))
+
+
+def whatif_tool() -> Tool:
+    return Tool(
+        key="whatif",
+        title="What-If / Sensitivity Study",
+        description="Sweep the planning assumptions (demand, holding, lead time, ...) over their "
+                    "bands against the inventory policy cost: rank them by impact (tornado), bound "
+                    "the optimistic/pessimistic corners, and find the budget break-even.",
+        intent_keywords=(
+            "what-if", "what if", "sensitivity", "sensitivity analysis", "tornado",
+            "break-even", "break even", "scenario analysis", "stress test",
+            "how sensitive", "downside", "best case", "worst case",
+        ),
+        requires_data=True,
+        options=tool_options.whatif_options,
+        prepare=_whatif_prepare,
+        run=_whatif_run,
+        qa=lambda report: whatif_job.verify(report),
+        deliver=lambda report, out_dir, client: whatif_job.write_operational(report, out_dir, client),
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            whatif_job.build_deck(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
+        ).write_all(out_dir),
+    )
+
+
+# ---- financial_kpis (inventory finance dashboard) ----------------------------
+
+def _financial_kpis_prepare(request: JobRequest, provider: LLMProvider) -> Prepared:
+    if not request.data_path:
+        return Prepared(status="needs_data", messages=["a per-SKU financials CSV (cogs, avg inventory value, margin) is required"])
+    try:
+        records = financial_kpis_job.prepare(request.data_path, request.params)
+    except (ValueError, FileNotFoundError) as exc:
+        return Prepared(status="needs_data", messages=[str(exc)])
+    if not records:
+        return Prepared(status="needs_data", messages=["no SKUs found in the data"])
+    return Prepared(status="ok", payload=records)
+
+
+def _financial_kpis_run(payload: object, params: dict) -> Produced:
+    report = financial_kpis_job.run(
+        payload, dso=params.get("dso", 0.0), dpo=params.get("dpo", 0.0),
+    )
+    return Produced(report=report, summary=(
+        f"Inventory finance for {report.n_skus} SKU(s): {report.turns:.1f} turns, "
+        f"GMROI {report.gmroi:.2f}, {report.dio:.0f}-day DIO."
+    ))
+
+
+def financial_kpis_tool() -> Tool:
+    return Tool(
+        key="financial_kpis",
+        title="Inventory Financial KPIs",
+        description="Roll up the per-SKU finance pack: inventory turns, DIO, GMROI, sell-through, "
+                    "inventory-to-sales and cash-to-cash, and flag the weakest-GMROI SKUs.",
+        intent_keywords=(
+            "gmroi", "inventory turns", "turnover", "days inventory", "sell-through",
+            "sell through", "inventory to sales", "weeks of supply", "inventory kpi",
+            "financial kpi", "inventory health", "financial dashboard",
+        ),
+        requires_data=True,
+        options=tool_options.financial_kpis_options,
+        prepare=_financial_kpis_prepare,
+        run=_financial_kpis_run,
+        qa=lambda report: financial_kpis_job.verify(report),
+        deliver=lambda report, out_dir, client: financial_kpis_job.write_operational(report, out_dir, client),
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            financial_kpis_job.build_deck(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
+        ).write_all(out_dir),
+    )
+
+
+# ---- reconciliation (inventory record accuracy / IRA) ------------------------
+
+def _reconciliation_prepare(request: JobRequest, provider: LLMProvider) -> Prepared:
+    if not request.data_path:
+        return Prepared(status="needs_data", messages=["a count CSV (product, system qty, physical qty) is required"])
+    try:
+        records = reconciliation_job.prepare(request.data_path, request.params)
+    except (ValueError, FileNotFoundError) as exc:
+        return Prepared(status="needs_data", messages=[str(exc)])
+    if not records:
+        return Prepared(status="needs_data", messages=["no count lines found in the data"])
+    return Prepared(status="ok", payload=records)
+
+
+def _reconciliation_run(payload: object, params: dict) -> Produced:
+    report = reconciliation_job.run(
+        payload,
+        tolerance_pct=params.get("tolerance_pct", 0.0),
+        tolerance_units=params.get("tolerance_units", 0.0),
+    )
+    return Produced(report=report, summary=(
+        f"IRA {report.ira * 100:.0f}% across {report.n_counted} line(s); "
+        f"{report.n_counted - report.n_within} out of tolerance, "
+        f"{report.total_variance_value:,.0f} in variance value."
+    ))
+
+
+def reconciliation_tool() -> Tool:
+    return Tool(
+        key="reconciliation",
+        title="Inventory Record Accuracy (IRA)",
+        description="Reconcile system vs physical counts against a tolerance band, report inventory "
+                    "record accuracy (IRA) and the dollar impact of variances, and rank the worst lines.",
+        intent_keywords=(
+            "inventory accuracy", "record accuracy", "reconcile", "reconciliation",
+            "physical count", "stock count", "cycle count", "count variance",
+            "book vs physical", "system vs physical", "shrinkage", "stock discrepancy",
+        ),
+        requires_data=True,
+        options=tool_options.reconciliation_options,
+        prepare=_reconciliation_prepare,
+        run=_reconciliation_run,
+        qa=lambda report: reconciliation_job.verify(report),
+        deliver=lambda report, out_dir, client: reconciliation_job.write_operational(report, out_dir, client),
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            reconciliation_job.build_deck(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
+        ).write_all(out_dir),
+    )
+
+
+# ---- returns (reverse logistics / disposition) -------------------------------
+
+def _returns_prepare(request: JobRequest, provider: LLMProvider) -> Prepared:
+    if not request.data_path:
+        return Prepared(status="needs_data", messages=["a returns CSV (product, returned units, unit cost, reason) is required"])
+    try:
+        lines = returns_job.prepare(request.data_path, request.params)
+    except (ValueError, FileNotFoundError) as exc:
+        return Prepared(status="needs_data", messages=[str(exc)])
+    if not lines:
+        return Prepared(status="needs_data", messages=["no return lines found in the data"])
+    return Prepared(status="ok", payload=lines)
+
+
+def _returns_run(payload: object, params: dict) -> Produced:
+    report = returns_job.run(
+        payload,
+        restock_handling_per_unit=params.get("restock_handling_per_unit", 0.0),
+        refurbish_cost_per_unit=params.get("refurbish_cost_per_unit", 0.0),
+        refurbish_resale_factor=params.get("refurbish_resale_factor", 0.6),
+        liquidation_recovery_pct=params.get("liquidation_recovery_pct", 0.2),
+        scrap_cost_per_unit=params.get("scrap_cost_per_unit", 0.0),
+    )
+    return Produced(report=report, summary=(
+        f"{report.n_lines} return line(s); recommended strategy '{report.recommended_strategy}', "
+        f"{report.recovered_value:,.0f} recovered ({report.recovery_rate * 100:.0f}%)."
+    ))
+
+
+def returns_tool() -> Tool:
+    return Tool(
+        key="returns",
+        title="Returns & Reverse Logistics",
+        description="Rank each returned lot's disposition (restock / refurbish / liquidate / scrap) "
+                    "by net recovery, roll up recovery rate + value at risk + the reason Pareto, and "
+                    "offer ranked, executable recovery strategies to choose from.",
+        intent_keywords=(
+            "reverse logistics", "reverse-logistics", "product returns", "returns analysis",
+            "returns disposition", "disposition", "return rate", "handle returns",
+            "refurbish", "salvage value", "returns recovery", "returned goods",
+        ),
+        requires_data=True,
+        prepare=_returns_prepare,
+        run=_returns_run,
+        qa=lambda report: returns_job.verify(report),
+        deliver=lambda report, out_dir, client: returns_job.write_operational(report, out_dir, client),
+        deck=lambda report, out_dir, client, citations, confidence, options: replace(
+            returns_job.build_deck(report, client=client, citations=tuple(citations), confidence=confidence),
+            options=tuple(options),
+        ).write_all(out_dir),
+        # The disposition decision IS a set of ranked, executable choices -> surface them as
+        # the guided OPTIONS outcome on success (not just an "executed" deck).
+        options=lambda report: report.outcome,
     )
 
 
@@ -536,5 +772,9 @@ def build_default_registry() -> ToolRegistry:
     reg.register(sourcing_tool())
     reg.register(ddmrp_tool())
     reg.register(landed_cost_tool())
+    reg.register(whatif_tool())
+    reg.register(financial_kpis_tool())
+    reg.register(reconciliation_tool())
+    reg.register(returns_tool())
     reg.register(warehouse_layout_tool())
     return reg

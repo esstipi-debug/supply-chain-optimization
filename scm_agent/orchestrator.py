@@ -61,8 +61,10 @@ class Orchestrator:
             logger.error("orchestrator.run failed", exc_info=True)
             result = JobResult(status=STATUS_ERROR, tool=None, confidence=0.0,
                                deliverables={}, summary="An internal error occurred.")
-        # Single boundary: every result leaves with a protected, executable path.
-        return replace(result, guided=to_guided_outcome(result))
+        # Single boundary: every result leaves with a protected, executable path. A tool may
+        # supply its own ranked-options outcome on success (set in _run); otherwise derive the
+        # protected fallback. Either way, no result is a dead end.
+        return replace(result, guided=result.guided or to_guided_outcome(result))
 
     def _run(self, request: JobRequest, out_dir: Path) -> JobResult:
         intent = classify(request.brief, self.registry, self.provider, job_type_override=request.job_type)
@@ -103,17 +105,23 @@ class Orchestrator:
         # Ground first: the premium deck weaves the L3 citations in, so they must
         # be resolved before the deliver path runs.
         citations = self._ground(tool)
+        # Compute the ranked options once: they become JobResult.guided AND the deck's
+        # action menu, so the sellable artifact carries the same choices the agent returns.
+        guided = tool.options(produced.report) if tool.options else None
+        deck_options = list(guided.options) if guided is not None else []
         written = tool.deliver(produced.report, out_dir / tool.key, request.client)
         if tool.deck is not None:
             deck_files = tool.deck(
-                produced.report, out_dir / tool.key, request.client, citations, intent.confidence
+                produced.report, out_dir / tool.key, request.client, citations,
+                intent.confidence, deck_options,
             )
             written.update({f"deck_{name}": path for name, path in deck_files.items()})
         summary = self._narrative(produced.summary, tool.title, citations)
         return JobResult(
             status=STATUS_OK, tool=tool.key, confidence=intent.confidence,
             deliverables={name: str(path) for name, path in written.items()}, summary=summary,
-            citations=citations,
+            citations=citations, kb_warnings=self.knowledge.warnings(),
+            guided=guided,
         )
 
     def _ground(self, tool: Tool) -> list[str]:

@@ -11,6 +11,7 @@ Run:
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -25,7 +26,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile  # noqa: E402
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
@@ -37,6 +39,7 @@ from src.sources import CsvDemandSource  # noqa: E402
 from warehouse.generator import generate_layout  # noqa: E402
 from warehouse.html_export import to_html  # noqa: E402
 from warehouse.qa import validate as validate_layout  # noqa: E402
+from webapp import observability, security  # noqa: E402
 
 DATA_FILE = _REPO_ROOT / "data" / "sample_demand_portfolio.csv"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -65,6 +68,29 @@ class SafeJSONResponse(JSONResponse):
 
 
 app = FastAPI(title="Inventory Planner", version="1.0.0", default_response_class=SafeJSONResponse)
+
+# Always-on hardening headers (+ path-aware CSP). CORS is opt-in via env allowlist.
+app.middleware("http")(security.security_headers_middleware)
+if security.CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=security.CORS_ORIGINS,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
+
+# Structured per-request access log (+ X-Request-ID). Registered last so it wraps
+# the others and records the final status/duration.
+app.middleware("http")(observability.request_log_middleware)
+if observability.should_configure_logging():
+    observability.configure_logging()
+
+# Fail loud on an unsecured production boot; refuse outright if REQUIRE_SECURE.
+_PROD_WARNINGS = security.production_warnings()
+for _w in _PROD_WARNINGS:
+    logging.getLogger("linchpin.security").warning("production hardening: %s", _w)
+if _PROD_WARNINGS and security.REQUIRE_SECURE:
+    raise RuntimeError("LINCHPIN_REQUIRE_SECURE is set but: " + "; ".join(_PROD_WARNINGS))
 
 
 def _reject_nonfinite(token: str) -> float:
@@ -252,7 +278,7 @@ def compute_portfolio(
     }
 
 
-@app.get("/api/portfolio")
+@app.get("/api/portfolio", dependencies=[Depends(security.rate_limit)])
 def api_portfolio(
     service_level: float = Query(0.95, gt=0.0, lt=1.0),
     order_cost: float = Query(80.0, gt=0.0),
@@ -312,7 +338,7 @@ def _prune_old_jobs(now: float | None = None) -> None:
             continue
 
 
-@app.post("/api/jobs")
+@app.post("/api/jobs", dependencies=[Depends(security.rate_limit), Depends(security.require_api_key)])
 async def api_jobs(
     brief: str = Form(...),
     client: str = Form("Client"),
@@ -375,6 +401,7 @@ async def api_jobs(
         "qa_issues": result.qa_issues,
         "clarifications": result.clarifications,
         "citations": result.citations,
+        "kb_warnings": result.kb_warnings,
     }
 
 
