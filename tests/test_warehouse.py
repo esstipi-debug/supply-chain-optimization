@@ -1,6 +1,7 @@
 import json
 from dataclasses import replace
 
+from jobs.warehouse_job import run as run_warehouse
 from warehouse.generator import generate_layout
 from warehouse.html_export import to_html
 from warehouse.model import Aisle, Building, Dock, Gate, Layout, Rack, Site, Slot, TruckPath, Yard
@@ -168,3 +169,13 @@ def test_to_html_is_self_contained_and_embeds_layout():
     # the exact serialized layout is embedded for the in-page renderer
     assert json.dumps(layout.to_dict()) in html
     assert "__LAYOUT__" in html
+
+
+# --- Task 5: Job playbook ---
+
+
+def test_warehouse_job_returns_layout_and_report():
+    layout, report = run_warehouse({"racks": {"modules": 3}})
+    assert len(layout.racks) == 3
+    assert report.startswith("# Warehouse layout")
+    assert "Racks: 3" in report
