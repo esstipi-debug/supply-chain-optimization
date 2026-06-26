@@ -65,8 +65,16 @@ def test_croston_all_zero_history_forecasts_zero():
 
 
 def test_forecast_demand_auto_dispatch():
-    assert forecast_demand(DENSE).method == "ses"
-    assert forecast_demand(INTERMITTENT).method == "croston"
+    from src.forecasting_auto import MIN_PERIODS_STATSFORECAST, statsforecast_available
+
+    dense = forecast_demand(DENSE)
+    inter = forecast_demand(INTERMITTENT)
+    if statsforecast_available() and len(DENSE) >= MIN_PERIODS_STATSFORECAST:
+        assert dense.method in ("auto_ets", "ses")
+        assert inter.method in ("tsb", "croston")
+    else:
+        assert dense.method == "ses"
+        assert inter.method == "croston"
 
 
 def test_forecast_demand_rejects_unknown_method():

@@ -48,7 +48,7 @@ def test_classifies_smooth():
     assert f.adi < ADI_THRESHOLD
     assert f.cv2 < CV2_THRESHOLD
     assert f.quadrant == "smooth"
-    assert f.recommended_method == "ses"
+    assert f.recommended_method == "auto_modern"
 
 
 def test_classifies_erratic():
@@ -56,7 +56,7 @@ def test_classifies_erratic():
     assert f.adi < ADI_THRESHOLD
     assert f.cv2 >= CV2_THRESHOLD
     assert f.quadrant == "erratic"
-    assert f.recommended_method == "ses"
+    assert f.recommended_method == "auto_modern"
 
 
 def test_classifies_intermittent():
@@ -64,7 +64,7 @@ def test_classifies_intermittent():
     assert f.adi >= ADI_THRESHOLD
     assert f.cv2 < CV2_THRESHOLD
     assert f.quadrant == "intermittent"
-    assert f.recommended_method == "croston"
+    assert f.recommended_method == "auto_modern"
 
 
 def test_classifies_lumpy():
@@ -72,7 +72,7 @@ def test_classifies_lumpy():
     assert f.adi >= ADI_THRESHOLD
     assert f.cv2 >= CV2_THRESHOLD
     assert f.quadrant == "lumpy"
-    assert f.recommended_method == "croston"
+    assert f.recommended_method == "auto_modern"
 
 
 def test_classify_reports_period_counts():

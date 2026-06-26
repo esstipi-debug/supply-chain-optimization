@@ -73,9 +73,9 @@ def test_run_segments_and_picks_method_per_quadrant():
     report = fj.run(fj.prepare_records(_demand_df()))
 
     by = {s.name: s for s in report.skus}
-    assert by["A"].quadrant == "smooth" and by["A"].method == "ses"
-    assert by["C"].quadrant == "intermittent" and by["C"].method == "croston"
-    assert by["D"].quadrant == "lumpy" and by["D"].method == "croston"
+    assert by["A"].quadrant == "smooth" and by["A"].method == "auto_modern"
+    assert by["C"].quadrant == "intermittent" and by["C"].method == "auto_modern"
+    assert by["D"].quadrant == "lumpy" and by["D"].method == "auto_modern"
     assert report.mix == {"smooth": 1, "erratic": 1, "intermittent": 1, "lumpy": 1}
     assert report.n_skus == 4
 

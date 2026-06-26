@@ -38,9 +38,9 @@ def test_portfolio_returns_full_portfolio():
 def test_real_engine_methods_present():
     d = client.get("/api/portfolio").json()
     methods = {s["method"] for s in d["skus"]}
-    # the real forecaster auto-routes intermittent SKUs to Croston, the rest to SES
-    assert "croston" in methods
-    assert "ses" in methods
+    allowed = {"auto_ets", "tsb", "auto_modern", "ses", "croston"}
+    assert methods <= allowed
+    assert d["params"]["forecast_method"] == "auto"
 
 
 def test_totals_internal_consistency():

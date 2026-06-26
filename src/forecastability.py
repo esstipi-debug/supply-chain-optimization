@@ -5,8 +5,8 @@ Classifies a demand series by two shape statistics:
   - CV^2 : squared coefficient of variation of the non-zero demands (size irregularity)
 
 and buckets it into the SBC quadrants - smooth / erratic / intermittent / lumpy - each
-paired with the forecast method that fits it (SES for regular timing, Croston for
-intermittent). Pure (numpy only), mirroring the analytical-core style.
+paired with ``auto_modern`` (StatsForecast AutoETS/TSB when installed, else SES/Croston).
+Pure (numpy only), mirroring the analytical-core style.
 
 Grounded in L3: Syntetos, Boylan & Croston (2005), "On the categorization of demand
 patterns"; Vandeput (2021), Data Science for Supply Chain Forecasting.
@@ -26,10 +26,10 @@ ADI_THRESHOLD = 1.32
 CV2_THRESHOLD = 0.49
 
 _METHOD_BY_QUADRANT = {
-    "smooth": "ses",
-    "erratic": "ses",
-    "intermittent": "croston",
-    "lumpy": "croston",
+    "smooth": "auto_modern",
+    "erratic": "auto_modern",
+    "intermittent": "auto_modern",
+    "lumpy": "auto_modern",
 }
 _QUADRANTS = ("smooth", "erratic", "intermittent", "lumpy")
 

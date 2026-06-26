@@ -92,7 +92,11 @@ def _std(arr: np.ndarray) -> float:
 
 
 def _legacy_fallback(arr: np.ndarray, method: str) -> ForecastResult:
-    legacy = "auto" if method in ("auto_modern", "auto") else "croston" if method == "tsb" else "ses"
+    """Fall back to built-in SES/Croston — never recurse through ``method='auto'``."""
+    if method in ("auto_modern", "auto", "tsb"):
+        legacy = "croston" if is_intermittent(arr) else "ses"
+    else:
+        legacy = "ses"  # auto_ets without statsforecast
     return forecast_demand(arr, method=legacy)
 
 

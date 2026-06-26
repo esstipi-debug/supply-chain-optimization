@@ -108,14 +108,16 @@ class SkuForecast:
     history: list[float]
 
 
-# ---- forecasts are slider-independent → compute once and cache ----------------
+# ---- forecasts are slider-independent → compute once and cache per method ----
 
-_FORECASTS: list[SkuForecast] | None = None
+_FORECASTS: dict[str, list[SkuForecast]] = {}
+_VALID_FORECAST_METHODS = frozenset({"auto", "auto_modern", "auto_ets", "tsb", "ses", "croston"})
 
 
-def _load_forecasts() -> list[SkuForecast]:
-    global _FORECASTS
-    if _FORECASTS is None:
+def _load_forecasts(method: str = "auto") -> list[SkuForecast]:
+    if method not in _VALID_FORECAST_METHODS:
+        raise ValueError(f"unknown forecast method: {method!r}")
+    if method not in _FORECASTS:
         source = CsvDemandSource(str(DATA_FILE), periods_per_year=PERIODS_PER_YEAR)
         out: list[SkuForecast] = []
         for pid in source.list_products():
@@ -124,14 +126,14 @@ def _load_forecasts() -> list[SkuForecast]:
             out.append(
                 SkuForecast(
                     product_id=pid,
-                    forecast=forecast_demand(series),
+                    forecast=forecast_demand(series, method=method),
                     unit_cost=meta.mean_unit_cost,
                     lead_periods=meta.lead_time_periods,
                     history=[float(x) for x in series],
                 )
             )
-        _FORECASTS = out
-    return _FORECASTS
+        _FORECASTS[method] = out
+    return _FORECASTS[method]
 
 
 def _status(forecast: ForecastResult) -> dict[str, str]:
@@ -223,8 +225,9 @@ def compute_portfolio(
     holding_rate: float,
     budget: float,
     lead_overrides: dict[str, float],
+    forecast_method: str = "auto",
 ) -> dict:
-    forecasts = _load_forecasts()
+    forecasts = _load_forecasts(forecast_method)
     skus = [
         _sku_payload(
             sf,
@@ -261,6 +264,7 @@ def compute_portfolio(
             "holding_rate": holding_rate,
             "budget": budget,
             "periods_per_year": PERIODS_PER_YEAR,
+            "forecast_method": forecast_method,
         },
         "skus": skus,
         "totals": {
@@ -284,8 +288,18 @@ def api_portfolio(
     order_cost: float = Query(80.0, gt=0.0),
     holding_rate: float = Query(0.22, gt=0.0, le=2.0),
     budget: float = Query(44000.0, ge=0.0),
+    forecast_method: str = Query(
+        "auto",
+        description="Forecast engine: auto (AutoETS/TSB when [forecast] installed), "
+        "auto_modern, auto_ets, tsb, ses, croston",
+    ),
     lead_overrides: str | None = Query(None, description="JSON object {sku: lead_periods}"),
 ) -> dict:
+    if forecast_method not in _VALID_FORECAST_METHODS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"forecast_method must be one of: {sorted(_VALID_FORECAST_METHODS)}",
+        )
     overrides: dict[str, float] = {}
     if lead_overrides:
         try:
@@ -311,6 +325,7 @@ def api_portfolio(
         holding_rate=holding_rate,
         budget=budget,
         lead_overrides=overrides,
+        forecast_method=forecast_method,
     )
 
 

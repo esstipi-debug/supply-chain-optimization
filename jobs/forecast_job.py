@@ -7,7 +7,8 @@ which the parallel loop owns), then for each SKU:
   1. cleans the series (missing -> 0, negatives floored),
   2. segments it by forecastability (Syntetos-Boylan ADI x CV^2 -> smooth / erratic /
      intermittent / lumpy) via ``src.forecastability``,
-  3. auto-selects the matching method (SES vs Croston) and backtests it on a holdout,
+  3. auto-selects the matching method (AutoETS/TSB via StatsForecast when installed,
+     else SES/Croston) and backtests it on a holdout,
   4. quantifies **Forecast Value-Add** vs a naive baseline (MASE < 1 == beats naive),
 
 and emits a protected ``GuidedOutcome`` with **ranked forecasting-policy options**
@@ -131,16 +132,16 @@ def _policy_outcome(
     scenarios = [
         Scenario(
             "auto_per_segment",
-            "Adopt the SBC-recommended method per SKU (SES for regular, Croston for intermittent)",
+            "Adopt the SBC-recommended method per SKU (AutoETS for regular, TSB for intermittent when available)",
             {"accuracy": beating_share, "ops_simplicity": 0.5, "manual_effort": 0.15},
             action="apply per-segment auto method selection",
             tradeoffs="best accuracy; one-time setup of per-segment automation",
         ),
         Scenario(
             "global_ses",
-            "Run a single SES model across every SKU",
+            "Run a single smoothing model across every SKU (SES / AutoETS)",
             {"accuracy": regular_share, "ops_simplicity": 1.0, "manual_effort": 0.0},
-            action="apply one global SES model",
+            action="apply one global smoothing model",
             tradeoffs="simplest to operate; over-forecasts intermittent/lumpy demand",
         ),
         Scenario(
