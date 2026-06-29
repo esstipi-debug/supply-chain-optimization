@@ -54,3 +54,6 @@ output/
 # orchestrator job outputs
 webapp/_jobs_output/
 .gstack/
+
+# captured demo leads (PII — never versioned)
+webapp/_leads/

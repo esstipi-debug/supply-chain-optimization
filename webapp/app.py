@@ -47,6 +47,10 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 OPERATOR_DOCS_DIR = _REPO_ROOT / "documentation" / "operator"
 JOBS_OUTPUT_DIR = _REPO_ROOT / "webapp" / "_jobs_output"
 JOBS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+LEADS_DIR = _REPO_ROOT / "webapp" / "_leads"
+LEADS_DIR.mkdir(parents=True, exist_ok=True)
+LEADS_FILE = LEADS_DIR / "leads.jsonl"  # one JSON object per captured demo lead (PII; gitignored)
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # cap /api/jobs uploads at 25 MB
 JOBS_TTL_SECONDS = 3600  # per-job output dirs older than this are swept on the next request
 PERIODS_PER_YEAR = 52.0
@@ -339,6 +343,27 @@ def api_health() -> dict:
     return {"ok": True, "skus": len(_load_forecasts())}
 
 
+@app.post("/api/leads", dependencies=[Depends(security.rate_limit)])
+async def api_leads(email: str = Form(...), source: str = Form("demo")) -> dict:
+    """Capture a demo lead: validate the email and append it to a JSONL store.
+
+    The store lives under webapp/_leads/ (gitignored — it holds PII) and is never
+    versioned. No API key is required: this is the public demo's email gate.
+    """
+    addr = email.strip().lower()
+    if len(addr) > 254 or not EMAIL_RE.match(addr):
+        raise HTTPException(status_code=400, detail="invalid email")
+    clean_source = re.sub(r"[^\w.\-]", "", source)[:40] or "demo"
+    record = {
+        "email": addr,
+        "source": clean_source,
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    with LEADS_FILE.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return {"ok": True}
+
+
 def _prune_old_jobs(now: float | None = None) -> None:
     """Best-effort sweep: drop per-job output dirs older than JOBS_TTL_SECONDS.
 
@@ -364,6 +389,7 @@ async def api_jobs(
     client: str = Form("Client"),
     job_type: str | None = Form(None),
     params: str = Form("{}"),
+    use_sample: bool = Form(False),
     file: UploadFile | None = File(None),
 ) -> dict:
     try:
@@ -397,6 +423,10 @@ async def api_jobs(
             raise HTTPException(status_code=413, detail=f"upload exceeds {MAX_UPLOAD_BYTES} bytes")
         upload.write_bytes(data)
         data_path = str(upload)
+
+    # Demo path: no upload, but the visitor asked to try the bundled sample dataset.
+    if data_path is None and use_sample:
+        data_path = str(DATA_FILE)
 
     result = _get_orchestrator().run(
         brief, data_path=data_path, overrides=parsed_params,
@@ -483,6 +513,13 @@ def index() -> FileResponse:
 def console() -> FileResponse:
     """The live agent console — a thin UI over POST /api/jobs."""
     return FileResponse(STATIC_DIR / "prototype" / "index.html")
+
+
+@app.get("/demo")
+def demo_page() -> FileResponse:
+    """Lead-gated self-serve demo: capture an email, then upload data or use the
+    bundled sample dataset and see what the engine recommends."""
+    return FileResponse(STATIC_DIR / "demo" / "index.html")
 
 
 @app.get("/operator")

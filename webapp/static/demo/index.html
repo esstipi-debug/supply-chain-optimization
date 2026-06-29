@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linchpin — Demo</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#080b11; --panel:#111722; --panel-2:#0f141d;
+    --line:#1e2733; --line-2:#283341;
+    --txt:#e7eef6; --txt-2:#c4cfdb; --muted:#9aa7b6; --faint:#5e6b7a;
+    --accent:#4fd1c5; --accent-bright:#5eead4; --accent-soft:rgba(79,209,197,.14); --accent-bd:rgba(79,209,197,.45);
+    --ok:#3fb950; --ok-soft:rgba(63,185,80,.12); --ok-bd:rgba(63,185,80,.4);
+    --warn:#d4a017; --warn-soft:rgba(212,160,23,.12); --warn-bd:rgba(212,160,23,.4);
+    --bad:#f0564a; --bad-soft:rgba(240,86,74,.12); --bad-bd:rgba(240,86,74,.42);
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --r:13px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--txt);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(1100px 520px at 10% -8%,rgba(79,209,197,.09),transparent 60%),radial-gradient(900px 620px at 110% 0%,rgba(120,90,255,.06),transparent 55%);background-attachment:fixed}
+  a{color:var(--accent-bright);text-decoration:none}
+  .wrap{max-width:960px;margin:0 auto;padding:0 22px}
+  header{border-bottom:1px solid var(--line);background:rgba(8,11,17,.7);backdrop-filter:blur(10px)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .brand{display:flex;align-items:center;gap:9px;font:700 17px/1 var(--mono)}
+  .brand .d{color:var(--accent)}
+  header a.back{font-size:14px;color:var(--txt-2)}
+  h1{font-size:clamp(1.7rem,1.2rem+1.8vw,2.4rem);font-weight:800;letter-spacing:-.02em;margin:0}
+  h2{font-size:1.05rem;font-weight:700;margin:0 0 4px}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent-bright)}
+  .muted{color:var(--muted)} .sub{color:var(--txt-2)}
+  section{padding:38px 0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:24px}
+  label{display:block;font:600 12.5px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  input[type=email],input[type=text],textarea,input[type=file]{width:100%;background:var(--panel-2);border:1px solid var(--line-2);border-radius:10px;color:var(--txt);font-family:var(--sans);font-size:15px;padding:12px 13px;outline:none;transition:border-color .15s}
+  input:focus,textarea:focus{border-color:var(--accent-bd)}
+  textarea{min-height:74px;resize:vertical;line-height:1.45}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:600 14.5px/1 var(--sans);padding:12px 20px;border-radius:999px;border:1px solid transparent;cursor:pointer;transition:transform .15s,box-shadow .15s,background .15s,border-color .15s}
+  .btn-primary{background:linear-gradient(150deg,var(--accent-bright),var(--accent));color:#06201d;box-shadow:0 10px 26px -12px rgba(79,209,197,.6)}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 16px 32px -12px rgba(79,209,197,.85)}
+  .btn-ghost{background:transparent;color:var(--txt);border-color:var(--line-2)}
+  .btn-ghost:hover{border-color:var(--accent-bd);background:var(--accent-soft)}
+  .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .hidden{display:none!important}
+  .hint{font-size:13px;color:var(--faint);margin-top:9px}
+  .err{color:#ff8b81;font-size:13.5px;margin-top:10px;min-height:1em}
+  .chip{display:inline-flex;align-items:center;gap:7px;font:600 12px/1 var(--mono);padding:6px 11px;border-radius:999px;border:1px solid var(--line-2);color:var(--txt-2)}
+  .chip.ok{background:var(--ok-soft);border-color:var(--ok-bd);color:#79e08c}
+  .chip.warn{background:var(--warn-soft);border-color:var(--warn-bd);color:#e8c45a}
+  .chip.bad{background:var(--bad-soft);border-color:var(--bad-bd);color:#ff8b81}
+  .result-head{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:14px}
+  .tool{font:600 13px/1 var(--mono);color:var(--txt-2)}
+  .summary{font-size:15px;color:var(--txt);line-height:1.55;white-space:pre-wrap}
+  .h3{font:700 13px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--accent-bright);margin:22px 0 10px}
+  ul.list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  ul.list li{font-size:14px;color:var(--txt-2);padding-left:16px;position:relative}
+  ul.list li::before{content:"›";position:absolute;left:0;color:var(--accent)}
+  .dl{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:11px 14px;font-size:14px}
+  .dl:hover{border-color:var(--accent-bd)}
+  .spin{width:15px;height:15px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .empty{color:var(--faint);font-size:14px;text-align:center;padding:30px 10px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:780px){.grid{grid-template-columns:1fr}}
+  .privacy{font-size:12.5px;color:var(--faint);margin-top:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="brand"><span class="d">&#9672;</span> Linchpin</span>
+    <a class="back" href="/">Dashboard &rarr;</a>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <span class="eyebrow">Demo en vivo</span>
+    <h1 style="margin-top:12px">Probá el motor con tus datos</h1>
+    <p class="sub" style="max-width:62ch;margin-top:10px">Subí un CSV de productos y ventas, o usá el dataset de ejemplo. Linchpin clasifica, calcula la política óptima (EOQ, stock de seguridad, punto de reorden) y te devuelve un plan con parámetros recomendados — citado y auditable.</p>
+  </section>
+
+  <!-- EMAIL GATE -->
+  <section id="gate">
+    <div class="panel" style="max-width:520px">
+      <h2>Ingresá tu email para abrir el demo</h2>
+      <p class="muted" style="font-size:13.5px;margin:0 0 16px">Lo usamos solo para contactarte sobre el demo. Nada de spam.</p>
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="nombre@empresa.com" autocomplete="email">
+      <div class="row" style="margin-top:14px">
+        <button id="gateBtn" class="btn btn-primary">Abrir el demo &rarr;</button>
+      </div>
+      <p id="gateErr" class="err"></p>
+    </div>
+  </section>
+
+  <!-- DEMO -->
+  <section id="demo" class="hidden">
+    <div class="grid">
+      <div class="panel">
+        <h2>1 · Tus datos</h2>
+        <p class="muted" style="font-size:13px;margin:0 0 16px">Subí un archivo o probá con el dataset de ejemplo.</p>
+
+        <label for="brief">Qué querés resolver</label>
+        <textarea id="brief">Configurar puntos de reorden y stock de seguridad</textarea>
+
+        <div style="margin-top:16px">
+          <label for="file">Archivo (CSV / Excel)</label>
+          <input id="file" type="file" accept=".csv,.xlsx,.xls">
+        </div>
+
+        <div class="row" style="margin-top:18px">
+          <button id="runUpload" class="btn btn-primary">Ejecutar &rarr;</button>
+          <button id="runSample" class="btn btn-ghost">Usar dataset de demo</button>
+        </div>
+        <p id="runErr" class="err"></p>
+        <p class="privacy">El dataset de demo es <span class="muted">sample_demand_portfolio.csv</span> (8 SKU, 52 semanas).</p>
+      </div>
+
+      <div class="panel">
+        <h2>2 · Lo que arroja el motor</h2>
+        <div id="out">
+          <div class="empty" id="outEmpty">Ejecutá para ver el plan recomendado.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  var LS_KEY = "lp_demo_lead";
+  var gate = document.getElementById("gate");
+  var demo = document.getElementById("demo");
+  var emailEl = document.getElementById("email");
+  var gateBtn = document.getElementById("gateBtn");
+  var gateErr = document.getElementById("gateErr");
+  var runUpload = document.getElementById("runUpload");
+  var runSample = document.getElementById("runSample");
+  var runErr = document.getElementById("runErr");
+  var out = document.getElementById("out");
+
+  function unlock(){ gate.classList.add("hidden"); demo.classList.remove("hidden"); }
+  if (localStorage.getItem(LS_KEY)) unlock();
+
+  function validEmail(v){ return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v); }
+
+  gateBtn.addEventListener("click", function(){
+    var email = (emailEl.value || "").trim();
+    gateErr.textContent = "";
+    if (!validEmail(email)) { gateErr.textContent = "Ingresá un email válido."; return; }
+    gateBtn.disabled = true; gateBtn.innerHTML = '<span class="spin"></span> Guardando…';
+    var fd = new FormData(); fd.append("email", email); fd.append("source", "demo");
+    fetch("/api/leads", { method:"POST", body:fd })
+      .then(function(r){ if(!r.ok) throw new Error("no se pudo guardar"); return r.json(); })
+      .then(function(){ localStorage.setItem(LS_KEY, email); unlock(); })
+      .catch(function(){ gateErr.textContent = "No se pudo guardar el email. Probá de nuevo."; })
+      .finally(function(){ gateBtn.disabled = false; gateBtn.innerHTML = "Abrir el demo &rarr;"; });
+  });
+  emailEl.addEventListener("keydown", function(e){ if(e.key==="Enter") gateBtn.click(); });
+
+  function statusInfo(s){
+    var map = {
+      ok:["ok","listo"], needs_data:["warn","faltan datos"],
+      needs_clarification:["warn","falta detalle"], qa_failed:["bad","QA fallo"], error:["bad","error"]
+    };
+    return map[s] || ["warn", (s||"").replace(/_/g," ")];
+  }
+  function esc(t){ var d=document.createElement("div"); d.textContent = t==null?"":String(t); return d.innerHTML; }
+
+  function render(d){
+    var si = statusInfo(d.status);
+    var html = '<div class="result-head">'
+      + '<span class="chip '+si[0]+'">'+esc(si[1])+'</span>'
+      + '<span class="tool">'+esc(d.tool||"—")+'</span>'
+      + '<span class="muted" style="font-size:12.5px">conf '+Math.round((d.confidence||0)*100)+'%</span>'
+      + '</div>';
+    if (d.summary) html += '<p class="summary">'+esc(d.summary)+'</p>';
+
+    var dl = d.download_urls || {}; var keys = Object.keys(dl);
+    if (keys.length){
+      html += '<div class="h3">Plan y parametros recomendados</div>';
+      keys.forEach(function(k){
+        html += '<a class="dl" href="'+esc(dl[k])+'" target="_blank" rel="noopener"><span>'+esc(k)+'</span><span class="muted">abrir &#8599;</span></a>';
+      });
+    }
+    var cites = d.citations || [];
+    if (cites.length){
+      html += '<div class="h3">Fuentes &middot; grounding L3</div><ul class="list">';
+      cites.forEach(function(c){ html += '<li>'+esc(c)+'</li>'; });
+      html += '</ul>';
+    }
+    var clar = d.clarifications || [];
+    if (clar.length){
+      html += '<div class="h3">Hace falta detalle</div><ul class="list">';
+      clar.forEach(function(c){ html += '<li>'+esc(c)+'</li>'; });
+      html += '</ul>';
+    }
+    var qa = d.qa_issues || [];
+    if (qa.length){
+      html += '<div class="h3" style="color:#ff8b81">QA</div><ul class="list">';
+      qa.forEach(function(q){ html += '<li>'+esc(q)+'</li>'; });
+      html += '</ul>';
+    }
+    out.innerHTML = html;
+  }
+
+  function run(useSample){
+    runErr.textContent = "";
+    var brief = (document.getElementById("brief").value || "").trim();
+    if (!brief){ runErr.textContent = "Escribí qué querés resolver."; return; }
+    var fileEl = document.getElementById("file");
+    var file = fileEl && fileEl.files && fileEl.files[0];
+    if (!useSample && !file){ runErr.textContent = "Subí un archivo o usá el dataset de demo."; return; }
+
+    var fd = new FormData();
+    fd.append("brief", brief);
+    fd.append("params", "{}");
+    if (useSample) fd.append("use_sample", "true");
+    if (file) fd.append("file", file);
+
+    runUpload.disabled = true; runSample.disabled = true;
+    out.innerHTML = '<div class="empty"><span class="spin"></span> Ruteando y ejecutando…</div>';
+    fetch("/api/jobs", { method:"POST", body:fd })
+      .then(function(r){ return r.json().then(function(j){ return { ok:r.ok, j:j }; }); })
+      .then(function(res){
+        if (!res.ok){ out.innerHTML = '<div class="empty">'+esc((res.j && res.j.detail) || "El servidor rechazó la solicitud.")+'</div>'; return; }
+        render(res.j);
+      })
+      .catch(function(err){ out.innerHTML = '<div class="empty">Fallo de red: '+esc((err && err.message)||err)+'</div>'; })
+      .finally(function(){ runUpload.disabled = false; runSample.disabled = false; });
+  }
+
+  runUpload.addEventListener("click", function(){ run(false); });
+  runSample.addEventListener("click", function(){ run(true); });
+})();
+</script>
+</body>
+</html>
